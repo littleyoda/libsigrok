@@ -32,6 +32,7 @@ static const uint32_t drvopts[] = {
 static const uint32_t devopts[] = {
 	SR_CONF_CONTINUOUS,
 	SR_CONF_CURRENT_LIMIT | SR_CONF_GET | SR_CONF_SET | SR_CONF_LIST,
+	SR_CONF_ENABLED | SR_CONF_GET | SR_CONF_SET,
 	SR_CONF_LIMIT_SAMPLES | SR_CONF_GET | SR_CONF_SET,
 };
 
@@ -139,6 +140,9 @@ static int config_get(uint32_t key, GVariant **data,
 		if (ret == SR_OK)
 			*data = g_variant_new_double(fvalue);
 		return ret;
+	case SR_CONF_ENABLED:
+		*data = g_variant_new_boolean(devc->load_activated);
+		return SR_OK;
 	default:
 		return SR_ERR_NA;
 	}
@@ -148,6 +152,7 @@ static int config_set(uint32_t key, GVariant *data,
 	const struct sr_dev_inst *sdi, const struct sr_channel_group *cg)
 {
 	double value;
+	gboolean bval;
 	struct dev_context *devc;
 
 	(void)data;
@@ -164,6 +169,14 @@ static int config_set(uint32_t key, GVariant *data,
 		if (value < 0.0 || value > 4.0)
 			return SR_ERR_ARG;
 		return ebd_set_current_limit(sdi, value);
+	case SR_CONF_ENABLED:
+		bval = g_variant_get_boolean(data);
+		if (bval) {
+			return ebd_loadstart(sdi->conn, devc);
+		} else {
+			return ebd_loadstop(sdi->conn, devc);
+
+		}
 	default:
 		return SR_ERR_NA;
 	}
