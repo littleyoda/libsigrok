@@ -34,6 +34,9 @@ static const uint32_t devopts[] = {
 	SR_CONF_CURRENT_LIMIT | SR_CONF_GET | SR_CONF_SET | SR_CONF_LIST,
 	SR_CONF_ENABLED | SR_CONF_GET | SR_CONF_SET,
 	SR_CONF_LIMIT_SAMPLES | SR_CONF_GET | SR_CONF_SET,
+//	SR_CONF_UNDER_VOLTAGE_CONDITION_ACTIVE | SR_CONF_GET,
+	SR_CONF_UNDER_VOLTAGE_CONDITION | SR_CONF_GET,
+	SR_CONF_UNDER_VOLTAGE_CONDITION_THRESHOLD | SR_CONF_GET | SR_CONF_SET | SR_CONF_LIST,
 };
 
 static GSList *scan(struct sr_dev_driver *di, GSList *options)
@@ -83,8 +86,10 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	devc = g_malloc0(sizeof(struct dev_context));
 	g_mutex_init(&devc->rw_mutex);
 	devc->current_limit = 0;
+	devc->under_voltage_threshold = 0;
 	devc->running = FALSE;
 	devc->load_activated = FALSE;
+	devc->under_voltage_enabled = TRUE;
 	sr_sw_limits_init(&devc->limits);
 	sdi->priv = devc;
 
@@ -123,6 +128,7 @@ static int config_get(uint32_t key, GVariant **data,
 	int ret;
 	struct dev_context *devc;
 	float fvalue;
+	gboolean bval;
 
 	(void)cg;
 
@@ -142,6 +148,16 @@ static int config_get(uint32_t key, GVariant **data,
 		return ret;
 	case SR_CONF_ENABLED:
 		*data = g_variant_new_boolean(devc->load_activated);
+		return SR_OK;
+	case SR_CONF_UNDER_VOLTAGE_CONDITION_THRESHOLD:
+		ret = ebd_get_under_voltage_threshold(sdi, &fvalue);
+		if (ret == SR_OK)
+			*data = g_variant_new_double(fvalue);
+		return ret;
+	case SR_CONF_UNDER_VOLTAGE_CONDITION:
+		ret = ebd_get_under_voltage_enabled(sdi, &bval);
+		if (ret == SR_OK)
+			*data = g_variant_new_boolean(bval);
 		return SR_OK;
 	default:
 		return SR_ERR_NA;
@@ -177,6 +193,14 @@ static int config_set(uint32_t key, GVariant *data,
 			return ebd_loadstop(sdi->conn, devc);
 
 		}
+	case SR_CONF_UNDER_VOLTAGE_CONDITION:
+		bval = g_variant_get_boolean(data);
+		return ebd_set_under_voltage_enabled(sdi, bval);
+	case SR_CONF_UNDER_VOLTAGE_CONDITION_THRESHOLD:
+		value = g_variant_get_double(data);
+		if (value < 0.0 || value > 21.0)
+			return SR_ERR_ARG;
+		return ebd_set_under_voltage_threshold(sdi, value);
 	default:
 		return SR_ERR_NA;
 	}
@@ -191,6 +215,9 @@ static int config_list(uint32_t key, GVariant **data,
 		return STD_CONFIG_LIST(key, data, sdi, cg, scanopts, drvopts, devopts);
 	case SR_CONF_CURRENT_LIMIT:
 		*data = std_gvar_min_max_step(0.0, 4.0, 0.01);
+		break;
+	case SR_CONF_UNDER_VOLTAGE_CONDITION_THRESHOLD:
+		*data = std_gvar_min_max_step(0.0, 21.0, 0.01);
 		break;
 	default:
 		return SR_ERR_NA;

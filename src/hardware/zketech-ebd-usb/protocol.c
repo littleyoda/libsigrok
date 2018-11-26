@@ -71,6 +71,9 @@ static int send_cfg(struct sr_serial_dev_inst *serial, struct dev_context *devc)
 	uint8_t send[] = { 0xfa, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf8 };
 
 	encode_value(devc->current_limit, &send[2], &send[3], 1000.0);
+	if (devc->under_voltage_enabled) {
+		encode_value(devc->under_voltage_threshold, &send[4], &send[5], 1000.0);
+	}
 
 	send[8] = send[1] ^ send[2] ^ send[3] ^ send[4] ^ send[5] ^ \
 			send[6] ^ send[7];
@@ -282,6 +285,21 @@ SR_PRIV int ebd_get_current_limit(const struct sr_dev_inst *sdi, float *current)
 	return SR_OK;
 }
 
+
+SR_PRIV int ebd_get_under_voltage_threshold(const struct sr_dev_inst *sdi, float *current)
+{
+	struct dev_context *devc;
+
+	if (!(devc = sdi->priv))
+		return SR_ERR;
+
+	g_mutex_lock(&devc->rw_mutex);
+	*current = devc->under_voltage_threshold;
+	g_mutex_unlock(&devc->rw_mutex);
+
+	return SR_OK;
+}
+
 SR_PRIV int ebd_set_current_limit(const struct sr_dev_inst *sdi, float current)
 {
 	struct dev_context *devc;
@@ -323,6 +341,66 @@ SR_PRIV int ebd_set_current_limit(const struct sr_dev_inst *sdi, float current)
 
 	return ret;
 }
+
+SR_PRIV int ebd_set_under_voltage_threshold(const struct sr_dev_inst *sdi, float current)
+{
+	struct dev_context *devc;
+	int ret;
+
+	if (!(devc = sdi->priv))
+		return SR_ERR;
+
+	g_mutex_lock(&devc->rw_mutex);
+	devc->under_voltage_threshold = current;
+
+	if (!devc->running) {
+		sr_dbg("Setting Under Voltage Threshold later.");
+		g_mutex_unlock(&devc->rw_mutex);
+		return SR_OK;
+	}
+
+	sr_dbg("Setting Under Voltage Threshold to %fV.", current);
+
+	if (devc->load_activated) {
+		ret = send_cfg(sdi->conn, devc);
+	} else {
+		ret = SR_OK;
+	}
+
+	g_mutex_unlock(&devc->rw_mutex);
+
+	return ret;
+}
+
+SR_PRIV int ebd_set_under_voltage_enabled(const struct sr_dev_inst *sdi, gboolean enabled)
+{
+	struct dev_context *devc;
+
+	if (!(devc = sdi->priv))
+		return SR_ERR;
+
+	g_mutex_lock(&devc->rw_mutex);
+	devc->under_voltage_enabled = enabled;
+	g_mutex_unlock(&devc->rw_mutex);
+
+	return SR_OK;
+}
+
+SR_PRIV int ebd_get_under_voltage_enabled(const struct sr_dev_inst *sdi, gboolean *enabled)
+{
+	struct dev_context *devc;
+
+	if (!(devc = sdi->priv))
+		return SR_ERR;
+
+	g_mutex_lock(&devc->rw_mutex);
+	*enabled = devc->under_voltage_enabled;
+	g_mutex_unlock(&devc->rw_mutex);
+
+	return SR_OK;
+}
+
+
 
 SR_PRIV gboolean ebd_current_is0(struct dev_context *devc)
 {

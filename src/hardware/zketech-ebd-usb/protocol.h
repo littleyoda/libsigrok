@@ -38,6 +38,8 @@ struct dev_context {
 	struct sr_sw_limits limits;
 	GMutex rw_mutex;
 	float current_limit;
+	float under_voltage_threshold;
+	gboolean under_voltage_enabled;
 	gboolean running;
 	gboolean load_activated;
 };
@@ -55,6 +57,10 @@ SR_PRIV int ebd_loadstop(struct sr_serial_dev_inst *serial, struct dev_context *
 /* Configuration. */
 SR_PRIV int ebd_get_current_limit(const struct sr_dev_inst *sdi, float *current);
 SR_PRIV int ebd_set_current_limit(const struct sr_dev_inst *sdi, float current);
+SR_PRIV int ebd_set_under_voltage_threshold(const struct sr_dev_inst *sdi, float current);
+SR_PRIV int ebd_get_under_voltage_threshold(const struct sr_dev_inst *sdi, float *current);
+SR_PRIV int ebd_set_under_voltage_enabled(const struct sr_dev_inst *sdi, gboolean enabled);
+SR_PRIV int ebd_get_under_voltage_enabled(const struct sr_dev_inst *sdi, gboolean *enabled);
 SR_PRIV gboolean ebd_current_is0(struct dev_context *devc);
 
 #endif
